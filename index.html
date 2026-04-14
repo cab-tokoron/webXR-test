@@ -1,63 +1,64 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8">
-  <title>WebXR 簡単模型デモ</title>
+  <meta charset="utf-8" />
+  <title>WebXR – Sphere with Vertical Stripes (Inside)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    body { margin: 0; overflow: hidden; }
-    #enterVR {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      padding: 12px 20px;
-      font-size: 16px;
-      z-index: 10;
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
     }
   </style>
 </head>
 <body>
-<button id="enterVR">Enter VR</button>
 
 <script type="module">
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+import { VRButton } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/webxr/VRButton.js";
 
 /* =========================
-   レンダラ
+   Renderer
 ========================= */
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 
-// 白黒を完全に保つ設定
+// 白黒を完全に保つ
 renderer.toneMapping = THREE.NoToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
+// ★ WebXR 有効化
+renderer.xr.enabled = true;
+
 document.body.appendChild(renderer.domElement);
+document.body.appendChild(VRButton.createButton(renderer));
 
 /* =========================
-   シーン
+   Scene
 ========================= */
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000000); // 外部は完全な黒
+scene.background = new THREE.Color(0x000000);
 
 /* =========================
-   カメラ
+   Camera（サイコロ内部）
 ========================= */
 
 const camera = new THREE.PerspectiveCamera(
-  70,                                // FOV
+  70,
   window.innerWidth / window.innerHeight,
   0.01,
-  50
+  100
 );
 
 // 内部視点（少しオフセット）
 camera.position.set(0.4, 1.6, 0.4);
 
 /* =========================
-   マウス視点回転（最小実装）
+   マウス視点回転（PC確認用）
 ========================= */
 
 let yaw = 0;
@@ -79,10 +80,13 @@ document.addEventListener("mousemove", (e) => {
 });
 
 /* =========================
-   放射模様 CanvasTexture
+   Canvas：放射模様（円板用）
 ========================= */
 
-function createRadialTexture(size = 4096, fans = 24) {
+function createRadialTexture({
+  size = 4096,
+  fans = 24
+} = {}) {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext("2d");
@@ -104,34 +108,25 @@ function createRadialTexture(size = 4096, fans = 24) {
   }
 
   const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
 
-  // ★★★ ここから追加 ★★★
+  // 研究用途設定
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
   tex.generateMipmaps = false;
-  // ★★★ ここまで ★★★
 
-  tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
-
-/*
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-*/
 
 const radialTexture = createRadialTexture();
 
 /* =========================
-   幾何スケール（拡大版）
+   幾何スケール
 ========================= */
 
-// ★ 視野を強く覆うサイズ
-const CUBE_SIZE   = 20.0;     // サイコロ一辺 [m]
-const HALF        = 10.0;
-const DISC_RADIUS = 10.0;     // 円板直径 = 5.0 m
+const CUBE_SIZE   = 5.0;
+const HALF        = CUBE_SIZE / 2;
+const DISC_RADIUS = 2.5;
 
 /* =========================
    円板 Geometry / Material
@@ -145,7 +140,7 @@ const discMat = new THREE.MeshBasicMaterial({
 });
 
 /* =========================
-   円板6枚（サイコロ6面）
+   円板6枚（サイコロ）
 ========================= */
 
 const discs = [];
@@ -174,11 +169,10 @@ addDisc(new THREE.Vector3(0, 0, -HALF), new THREE.Euler(0, 0, 0));
    回転条件
 ========================= */
 
-// 球回転の 2 倍相当
 const ROT_SPEED = 0.02;
 
 /* =========================
-   アニメーション
+   Animation（★ setAnimationLoop）
 ========================= */
 
 renderer.setAnimationLoop(() => {
@@ -189,6 +183,17 @@ renderer.setAnimationLoop(() => {
 
   renderer.render(scene, camera);
 });
+
+/* =========================
+   Resize
+========================= */
+
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
 </script>
+
 </body>
 </html>
