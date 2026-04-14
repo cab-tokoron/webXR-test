@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>WebXR 簡単模型デモ</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    #enterVR {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      padding: 12px 20px;
+      font-size: 16px;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+<button id="enterVR">Enter VR</button>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+
+/* =========================
+   レンダラ
+========================= */
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+
+// 白黒を完全に保つ設定
+renderer.toneMapping = THREE.NoToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+document.body.appendChild(renderer.domElement);
+
+/* =========================
+   シーン
+========================= */
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000); // 外部は完全な黒
+
+/* =========================
+   カメラ
+========================= */
+
+const camera = new THREE.PerspectiveCamera(
+  70,                                // FOV
+  window.innerWidth / window.innerHeight,
+  0.01,
+  50
+);
+
+// 内部視点（少しオフセット）
+camera.position.set(0.4, 1.6, 0.4);
+
+/* =========================
+   マウス視点回転（最小実装）
+========================= */
+
+let yaw = 0;
+let pitch = 0;
+let mouseDown = false;
+const sensitivity = 0.002;
+
+document.addEventListener("mousedown", () => mouseDown = true);
+document.addEventListener("mouseup",   () => mouseDown = false);
+
+document.addEventListener("mousemove", (e) => {
+  if (!mouseDown) return;
+
+  yaw   -= e.movementX * sensitivity;
+  pitch -= e.movementY * sensitivity;
+
+  pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+  camera.rotation.set(pitch, yaw, 0);
+});
+
+/* =========================
+   放射模様 CanvasTexture
+========================= */
+
+function createRadialTexture(size = 4096, fans = 24) {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d");
+
+  ctx.translate(size / 2, size / 2);
+
+  for (let i = 0; i < fans; i++) {
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(
+      0, 0,
+      size / 2,
+      (i * 2 * Math.PI) / fans,
+      ((i + 1) * 2 * Math.PI) / fans
+    );
+    ctx.closePath();
+    ctx.fillStyle = (i % 2 === 0) ? "#ffffff" : "#000000";
+    ctx.fill();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+
+  // ★★★ ここから追加 ★★★
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  // ★★★ ここまで ★★★
+
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/*
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+*/
+
+const radialTexture = createRadialTexture();
+
+/* =========================
+   幾何スケール（拡大版）
+========================= */
+
+// ★ 視野を強く覆うサイズ
+const CUBE_SIZE   = 20.0;     // サイコロ一辺 [m]
+const HALF        = 10.0;
+const DISC_RADIUS = 10.0;     // 円板直径 = 5.0 m
+
+/* =========================
+   円板 Geometry / Material
+========================= */
+
+const discGeo = new THREE.CircleGeometry(DISC_RADIUS, 256);
+
+const discMat = new THREE.MeshBasicMaterial({
+  map: radialTexture,
+  side: THREE.DoubleSide
+});
+
+/* =========================
+   円板6枚（サイコロ6面）
+========================= */
+
+const discs = [];
+
+function addDisc(pos, rot) {
+  const m = new THREE.Mesh(discGeo, discMat);
+  m.position.copy(pos);
+  m.rotation.set(rot.x, rot.y, rot.z);
+  scene.add(m);
+  discs.push(m);
+}
+
+// +X / -X
+addDisc(new THREE.Vector3( HALF, 0, 0), new THREE.Euler(0,  Math.PI/2, 0));
+addDisc(new THREE.Vector3(-HALF, 0, 0), new THREE.Euler(0, -Math.PI/2, 0));
+
+// +Y / -Y
+addDisc(new THREE.Vector3(0,  HALF, 0), new THREE.Euler(-Math.PI/2, 0, 0));
+addDisc(new THREE.Vector3(0, -HALF, 0), new THREE.Euler( Math.PI/2, 0, 0));
+
+// +Z / -Z
+addDisc(new THREE.Vector3(0, 0,  HALF), new THREE.Euler(0, Math.PI, 0));
+addDisc(new THREE.Vector3(0, 0, -HALF), new THREE.Euler(0, 0, 0));
+
+/* =========================
+   回転条件
+========================= */
+
+// 球回転の 2 倍相当
+const ROT_SPEED = 0.02;
+
+/* =========================
+   アニメーション
+========================= */
+
+renderer.setAnimationLoop(() => {
+  discs.forEach(d => {
+    // 各円板のローカル法線軸で回転
+    d.rotation.z -= ROT_SPEED;
+  });
+
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
