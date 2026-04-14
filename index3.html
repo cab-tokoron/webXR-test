@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>WebXR – Sphere with Vertical Stripes (Inside)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+    }
+  </style>
+</head>
+<body>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+import { VRButton } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/webxr/VRButton.js";
+
+/* =========================
+   Renderer
+========================= */
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.NoToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.xr.enabled = true;
+
+document.body.appendChild(renderer.domElement);
+document.body.appendChild(VRButton.createButton(renderer));
+
+/* =========================
+   Scene / Camera
+========================= */
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 100);
+camera.position.set(0, 0, 0);
+
+/* =========================
+   UI（HTMLに直接追加）
+========================= */
+
+const ui = document.createElement("div");
+ui.style.position = "fixed";
+ui.style.top = "10px";
+ui.style.left = "10px";
+ui.style.color = "white";
+ui.style.fontSize = "14px";
+ui.style.zIndex = "10";
+ui.innerHTML = `
+<b>Vertical Axis</b><br>
+<label><input type="radio" name="axis" value="y" checked> Y axis</label>
+<label><input type="radio" name="axis" value="z"> Z axis</label><br><br>
+
+<b>Rotation Speed</b><br>
+<input type="range" id="speed" min="-0.05" max="0.05" step="0.001" value="0.02"><br><br>
+
+<b>Cylinder Diameter</b><br>
+<input type="range" id="diameter" min="2" max="10" step="0.5" value="6">
+`;
+document.body.appendChild(ui);
+
+/* =========================
+   Stripe Texture
+========================= */
+
+function createStripeTexture(size = 4096, stripes = 24) {
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const ctx = c.getContext("2d");
+
+  const w = size / stripes;
+  for (let i = 0; i < stripes; i++) {
+    ctx.fillStyle = (i % 2 === 0) ? "#ffffff" : "#000000";
+    ctx.fillRect(i * w, 0, w, size);
+  }
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  return tex;
+}
+
+const stripeTex = createStripeTexture();
+
+/* =========================
+   Cylinder
+========================= */
+
+let cylinder;
+const CYL_HEIGHT = 10;
+
+function createCylinder(radius) {
+  if (cylinder) scene.remove(cylinder);
+
+  const geo = new THREE.CylinderGeometry(
+    radius, radius,
+    CYL_HEIGHT,
+    128, 1,
+    true   // open-ended
+  );
+
+  const mat = new THREE.MeshBasicMaterial({
+    map: stripeTex,
+    side: THREE.DoubleSide
+  });
+
+  cylinder = new THREE.Mesh(geo, mat);
+  scene.add(cylinder);
+}
+
+createCylinder(3);
+
+/* =========================
+   State
+========================= */
+
+let rotationAxis = "y";
+let rotationSpeed = 0.02;
+
+/* =========================
+   UI Handlers
+========================= */
+
+document.querySelectorAll("input[name='axis']").forEach(r => {
+  r.onchange = () => rotationAxis = r.value;
+});
+
+document.getElementById("speed").oninput = e => {
+  rotationSpeed = parseFloat(e.target.value);
+};
+
+document.getElementById("diameter").oninput = e => {
+  createCylinder(parseFloat(e.target.value) / 2);
+};
+
+/* =========================
+   VR Enter時：鉛直軸補正
+========================= */
+
+renderer.xr.addEventListener("sessionstart", () => {
+  if (rotationAxis === "z") {
+    cylinder.rotation.x = Math.PI / 2;
+  } else {
+    cylinder.rotation.set(0, 0, 0);
+  }
+});
+
+/* =========================
+   Animation Loop
+========================= */
+
+renderer.setAnimationLoop(() => {
+  if (rotationAxis === "y") {
+    cylinder.rotation.y += rotationSpeed;
+  } else {
+    cylinder.rotation.z += rotationSpeed;
+  }
+
+  renderer.render(scene, camera);
+});
+
+/* =========================
+   Resize
+========================= */
+
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+
+</body>
+</html>
