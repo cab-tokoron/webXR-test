@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>WebXR – Sphere with Vertical Stripes (Inside)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+    }
+  </style>
+</head>
+<body>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+import { VRButton } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/webxr/VRButton.js";
+
+/* =========================
+   Renderer
+========================= */
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+
+// 白黒を完全に保つ
+renderer.toneMapping = THREE.NoToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+// ★ WebXR 有効化
+renderer.xr.enabled = true;
+
+document.body.appendChild(renderer.domElement);
+
+// ★ Enter VR ボタン
+document.body.appendChild(VRButton.createButton(renderer));
+
+/* =========================
+   Scene
+========================= */
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+
+/* =========================
+   Camera（球の内部）
+========================= */
+
+const camera = new THREE.PerspectiveCamera(
+  70,
+  window.innerWidth / window.innerHeight,
+  0.01,
+  100
+);
+
+// 球の中心
+camera.position.set(0, 0, 0);
+
+/* =========================
+   マウス視点回転（PC確認用）
+========================= */
+
+let yaw = 0;
+let pitch = 0;
+let mouseDown = false;
+const sensitivity = 0.002;
+
+document.addEventListener("mousedown", () => mouseDown = true);
+document.addEventListener("mouseup",   () => mouseDown = false);
+
+document.addEventListener("mousemove", (e) => {
+  if (!mouseDown) return;
+
+  yaw   -= e.movementX * sensitivity;
+  pitch -= e.movementY * sensitivity;
+
+  pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+  camera.rotation.set(pitch, yaw, 0);
+});
+
+/* =========================
+   Canvas: 縦ストライプ（経線）
+========================= */
+
+function createVerticalStripeTexture({
+  size = 4096,
+  stripes = 24   // 白12 + 黒12
+} = {}) {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d");
+
+  const stripeWidth = size / stripes;
+
+  for (let i = 0; i < stripes; i++) {
+    ctx.fillStyle = (i % 2 === 0) ? "#ffffff" : "#000000";
+    ctx.fillRect(i * stripeWidth, 0, stripeWidth, size);
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+
+  // 研究用途向け設定
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+
+  return tex;
+}
+
+const stripeTexture = createVerticalStripeTexture();
+
+/* =========================
+   Sphere Geometry / Material
+========================= */
+
+const SPHERE_RADIUS = 5.0;
+
+const sphereGeo = new THREE.SphereGeometry(
+  SPHERE_RADIUS,
+  128,
+  64
+);
+
+// 内側から見る
+const sphereMat = new THREE.MeshBasicMaterial({
+  map: stripeTexture,
+  side: THREE.DoubleSide
+});
+
+const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+scene.add(sphere);
+
+/* =========================
+   回転条件
+========================= */
+
+const ROT_SPEED = 0.02;
+
+/* =========================
+   Animation
+========================= */
+
+renderer.setAnimationLoop(() => {
+  // 球全体を回転
+  sphere.rotation.y += ROT_SPEED;
+
+  renderer.render(scene, camera);
+});
+
+/* =========================
+   Resize
+========================= */
+
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+
+</body>
+</html>
